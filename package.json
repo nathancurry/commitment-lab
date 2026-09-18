@@ -8,5 +8,8 @@
     "test": "node test/index.js"
   },
   "author": "Commitment Agent",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "ps-tree": "^1.2.0"
+  }
 }
