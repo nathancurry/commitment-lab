@@ -16,7 +16,7 @@ async function runTest() {
   }
   
   // Wait a bit for modules to load and scan
-  await new Promise(resolve => setTimeout(resolve, 7000));
+  await new Promise(resolve => setTimeout(resolve, 12000));
   
   // Test 2: Generate report
   console.log('\nTest 2: Generating report...');
@@ -32,14 +32,26 @@ async function runTest() {
   // Test 3: Check events
   console.log('\nTest 3: Recent events:');
   if (report && report.events.length > 0) {
-    const recentEvents = report.events.slice(-5);
+    const recentEvents = report.events.slice(-10);
     recentEvents.forEach((event, i) => {
       console.log(`${i + 1}. ${event.module}:${event.event} - ${event.message || JSON.stringify(event)}`);
     });
   }
   
-  // Test 4: Stop observer
-  console.log('\nTest 4: Stopping observer...');
+  // Test 4: Verify multiple modules loaded
+  console.log('\nTest 4: Module verification:');
+  if (report) {
+    const expectedModules = ['runtime', 'containers', 'git', 'broker', 'network'];
+    const loadedModules = report.activeModules;
+    console.log(`Expected modules: ${expectedModules.join(', ')}`);
+    console.log(`Loaded modules: ${loadedModules.join(', ')}`);
+    
+    const allLoaded = expectedModules.every(m => loadedModules.includes(m));
+    console.log(`All modules loaded: ${allLoaded ? 'YES' : 'NO'}`);
+  }
+  
+  // Test 5: Stop observer
+  console.log('\nTest 5: Stopping observer...');
   const stopped = await observer.stop();
   console.log(`Observer stopped: ${stopped}`);
   
