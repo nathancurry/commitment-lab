@@ -51,6 +51,39 @@ def blur_bytes(data: bytes, radius: float = 4.0) -> bytes:
         return buf.getvalue()
 
 
+def write_exif_jpeg(path: Path, arr: np.ndarray, datetime_original: str) -> Path:
+    """Write a JPEG carrying an EXIF DateTimeOriginal (sub-IFD 36868)."""
+    img = Image.fromarray(arr, mode="L").convert("RGB")
+    exif = Image.Exif()
+    exif.get_ifd(0x8769)[36868] = datetime_original
+    img.save(path, "JPEG", quality=95, exif=exif)
+    return path
+
+
+def perturb(
+    arr: np.ndarray,
+    brightness: float = 0.0,
+    noise: float = 6.0,
+    blur: float = 0.0,
+    seed: int = 3,
+) -> np.ndarray:
+    """A burst-frame style variant of arr: brightness shift, light noise,
+    optional slight blur. Coarse structure is preserved, so perceptual
+    hashes stay close."""
+    out = arr.astype(np.float64) + brightness
+    if noise:
+        out = out + np.random.default_rng(seed).uniform(
+            -noise, noise, size=arr.shape
+        )
+    out = np.clip(out, 0, 255).astype(np.uint8)
+    if blur:
+        img = Image.fromarray(out, mode="L").filter(
+            ImageFilter.GaussianBlur(blur)
+        )
+        out = np.asarray(img, dtype=np.uint8)
+    return out
+
+
 # --------------------------------------------------------------------------
 # Minimal DNG builder (validated against LibRaw/rawpy and exiftool)
 # --------------------------------------------------------------------------
@@ -87,6 +120,7 @@ def make_minimal_dng(
     width: int,
     height: int,
     camera: str = "SynthCam",
+    datetime: str | None = None,
 ) -> bytes:
     """Build a minimal DNG: IFD0 (embedded JPEG preview) + CFA SubIFD.
 
@@ -137,6 +171,8 @@ def make_minimal_dng(
     ifd0[0x014A] = (LONG, [("IFD", 1)])          # SubIFDs -> raw IFD
     ifd0[0xC612] = (BYTE, [1, 4, 0, 0])          # DNGVersion
     ifd0[0xC614] = (ASCII, camera)               # UniqueCameraModel
+    if datetime is not None:
+        ifd0[306] = (ASCII, datetime)            # DateTime
 
     ifds = [ifd0, raw_ifd]
 
@@ -198,7 +234,11 @@ def make_minimal_dng(
     return bytes(out)
 
 
-def make_dng_file(path: Path, preview_arr: np.ndarray) -> Path:
+def make_dng_file(
+    path: Path,
+    preview_arr: np.ndarray,
+    datetime: str | None = None,
+) -> Path:
     """Write a minimal DNG whose embedded preview shows preview_arr."""
     h, w = preview_arr.shape
     jpeg = encode_jpeg(preview_arr)
@@ -208,7 +248,7 @@ def make_dng_file(path: Path, preview_arr: np.ndarray) -> Path:
     cfa[1::2, 0::2] = 800
     cfa[1::2, 1::2] = 200
     cfa += (np.arange(w, dtype=np.uint16)[None, :] * 4)
-    path.write_bytes(make_minimal_dng(jpeg, cfa, w, h))
+    path.write_bytes(make_minimal_dng(jpeg, cfa, w, h, datetime=datetime))
     return path
 
 

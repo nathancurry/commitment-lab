@@ -43,12 +43,18 @@ def print_summary(report: dict, stream) -> None:
     print(f"  suggestions: {s['suggestions']}")
     if s["flags"]:
         print(f"  flags: {s['flags']}")
+    for burst in report.get("bursts", []):
+        best_name = Path(burst["best"]).name
+        span = burst.get("time_span_seconds")
+        span_text = f", span {span}s" if span is not None else ""
+        print(f"  burst {burst['id']}: {burst['size']} near-duplicates, best {best_name}{span_text}")
     for entry in report["files"]:
         if entry.get("skipped"):
             print(f"  {entry['path']}: skipped ({entry['type']})")
         elif "quality" in entry:
             q = entry["quality"]
-            print(f"  {entry['path']}: {q['suggestion']} (sharpness {q['sharpness']}, flags {q['flags'] or 'none'})")
+            burst = f" [{entry['burst']}]" if "burst" in entry else ""
+            print(f"  {entry['path']}: {q['suggestion']}{burst} (sharpness {q['sharpness']}, flags {q['flags'] or 'none'})")
         else:
             print(f"  {entry['path']}: ERROR {entry['error']}")
 

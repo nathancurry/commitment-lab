@@ -17,6 +17,9 @@ Dependencies live in a gitignored venv inside this directory:
     python3 -m venv .venv
     .venv/bin/pip install -e '.[test]'
 
+`opencv-python-headless` (4.x) is required for face/eye detection; without
+it the scan still works and simply omits the face check.
+
 ## Usage
 
     .venv/bin/photo-cull scan /path/to/photos            # human summary
@@ -32,20 +35,38 @@ Dependencies live in a gitignored venv inside this directory:
   (global plus best 4x4 tile), flagging `blur_suspect` when below a
   threshold. Essentially featureless frames are not flagged as blurry.
 - **Exposure**: mean luminance and shadow/highlight clipping fractions.
-- **Suggestion**: `reject` if blur is suspected, `maybe` if exposure flags,
-  else `keep`. These are heuristic technical verdicts only — not taste.
-
-Closed-eye detection and burst grouping are not implemented yet.
+- **Burst grouping**: a 64-bit dHash of each preview; frames within 8 bits
+  of each other are near-duplicates and are chained into burst groups
+  (single-link clustering). Each group gets an id (`b1`, `b2`, ...), its
+  members, a technically best frame (suggestion rank, then sharpness),
+  and — when capture times are available — the group's time span.
+  Capture time comes from EXIF `DateTimeOriginal` (JPEG via Pillow, RAW
+  via `exiftool` when installed); absence is fine.
+- **Closed eyes**: OpenCV Haar cascades (bundled, CPU) detect frontal
+  faces; a face with no detected open eye raises `eyes_closed_suspect`.
+  A coarse stage-1 heuristic: it only downgrades `keep` to `maybe`, never
+  rejects, and awaits validation on real faces.
+- **Suggestion**: `reject` if blur is suspected, `maybe` if exposure or
+  eye flags, else `keep`. These are heuristic technical verdicts only —
+  not taste.
 
 ## Status and calibration notes
 
 - Thresholds (`BLUR_THRESHOLD = 40.0`, `CLIP_FRACTION_THRESHOLD = 0.02`,
-  `NEAR_FLAT_VARIANCE = 1.0`) are placeholders pending calibration against
-  the operator's real library and past culls (stage 2).
+  `NEAR_FLAT_VARIANCE = 1.0`, `HASH_DISTANCE_THRESHOLD = 8`) are
+  placeholders pending calibration against the operator's real library
+  and past culls (stage 2).
+- Adding sensor-like noise *raises* the Laplacian sharpness metric, so a
+  noisy but sharp frame can out-score its clean sibling within a burst;
+  a noise-robust sharpness metric is a stage-2 consideration.
 - The RAW extraction path is tested offline with a synthesized minimal DNG
   (validated against LibRaw and exiftool). Real Fujifilm RAF extraction is
   expected to work through the same LibRaw path but still needs verification
   on real files (`/data/photo-samples` when mounted).
+- Face/eye detection is verified only for well-formed, crash-free behavior
+  on synthetic images (OpenCV cannot detect synthetic faces); the decision
+  logic is unit-tested with stub detections, and real-face validation
+  needs the sample set.
 - HEIC is not supported yet (needs `pillow-heif` if the library requires it).
 
 ## Privacy

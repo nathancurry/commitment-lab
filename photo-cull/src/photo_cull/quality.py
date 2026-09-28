@@ -16,6 +16,8 @@ from io import BytesIO
 import numpy as np
 from PIL import Image
 
+from .bursts import dhash
+
 # Normalize previews to this size (longest side) before scoring.
 NORMALIZED_SIZE = 1024
 
@@ -42,15 +44,21 @@ class QualityReport:
     shadow_clip_fraction: float       # fraction of pixels <= CLIP_MARGIN
     highlight_clip_fraction: float    # fraction of pixels >= 255 - CLIP_MARGIN
     flags: list[str] = field(default_factory=list)
+    dhash: int = 0                    # 64-bit perceptual hash of the preview
 
     @property
     def suggestion(self) -> str:
         """Technical-only suggestion: keep / maybe / reject."""
-        if "blur_suspect" in self.flags:
-            return "reject"
-        if self.flags:
-            return "maybe"
-        return "keep"
+        return suggestion_from_flags(self.flags)
+
+
+def suggestion_from_flags(flags: list[str]) -> str:
+    """Map flags to keep / maybe / reject (shared by scan-level merging)."""
+    if "blur_suspect" in flags:
+        return "reject"
+    if flags:
+        return "maybe"
+    return "keep"
 
 
 def load_grayscale(data: bytes) -> np.ndarray:
@@ -118,6 +126,7 @@ def assess(data: bytes) -> QualityReport:
         mean_luminance=float(gray.mean()),
         shadow_clip_fraction=shadow_clip,
         highlight_clip_fraction=highlight_clip,
+        dhash=dhash(gray),
     )
     if BLUR_THRESHOLD > sharp >= NEAR_FLAT_VARIANCE:
         report.flags.append("blur_suspect")
